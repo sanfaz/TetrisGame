@@ -1,0 +1,196 @@
+import pygame
+from copy import deepcopy
+from random import choice, randrange
+W,H = 10, 20
+TILE = 40
+OKNO = 750, 940
+pygame.mixer.init()
+pygame.mixer.music.load("tetris-assets/sounds/bakr.mp3")
+pygame.mixer.music.set_volume(0.3) 
+pygame.mixer.music.play(-1)
+sound1 = pygame.mixer.Sound("tetris-assets/sounds/Gameover.wav")
+sound2 = pygame.mixer.Sound("tetris-assets/sounds/Lineclear.wav")
+sound3 = pygame.mixer.Sound("tetris-assets/sounds/Drop.wav")
+GAME_RES = TILE * W, TILE * H
+
+FPS = 60
+
+pygame.init()
+sc = pygame.display.set_mode(OKNO)
+game_sc = pygame.Surface(GAME_RES)
+
+clock = pygame.time.Clock()
+
+grid = [pygame.Rect(x * TILE, y * TILE, TILE, TILE)for x in range(W) for y in range(H)]
+
+point, full = 0, 0
+points = {0: 0, 1: 100, 2: 300, 3: 700, 4: 1500}
+
+fg_pos = [[(-1, 0), (-2, 0), (0, 0), (1, 0)],
+               [(0, -1), (-1, -1), (-1, 0), (0, 0)],
+               [(-1, 0), (-1, 1), (0, 0), (0, -1)],
+               [(0, 0), (-1, 0), (0, 1), (-1, -1)],
+               [(0, 0), (0, -1), (0, 1), (-1, -1)],
+               [(0, 0), (0, -1), (0, 1), (1, -1)],
+               [(0, 0), (0, -1), (0, 1), (-1, 0)]]
+
+figures = [[pygame.Rect(x+W//2,y+1,1,1) for x,y in pos] for pos in fg_pos]
+fg_rect = pygame.Rect(0,0, TILE-2,TILE-2)
+
+field = [[0 for i in range(W)]for j in range(H)]
+
+font1 = pygame.font.Font('tetris-assets/fonts/FiraSans-Bold.ttf', 65)
+font2 = pygame.font.Font('tetris-assets/fonts/FiraMono-Medium.ttf', 45)
+title = font1.render('TETRIS', True, pygame.Color('WHITE'))
+title_score = font2.render('SCORE:', True, pygame.Color('MediumSeaGreen'))
+title_record = font2.render('RECORD:', True, pygame.Color('Goldenrod'))
+
+get_color = lambda : (randrange(0, 256), randrange(20, 256), randrange(0, 256))
+color = get_color()
+
+fg, nxt=deepcopy(choice(figures)), deepcopy(choice(figures))
+
+
+back = pygame.image.load('img/back2.jpg').convert()
+back2 = pygame.image.load('img/back.jpg').convert()
+
+a_count, a_limit, a_speed = 0, 2000, 60
+
+def get_record():
+    try:
+        with open('record') as f:
+            return f.readline()
+    except FileNotFoundError:
+        with open('record', 'w') as f:
+            f.write('0')
+
+
+def set_record(record, point):
+    rec = max(int(record), point)
+    with open('record', 'w') as f:
+        f.write(str(rec))
+
+
+def borders():
+    if fg[i].x < 0 or fg[i].x > W-1:
+        return False
+    elif fg[i].y > H-1 or field[fg[i].y][fg[i].x]:
+        return False
+    return True
+
+while True:
+    
+    
+    sc.blit(back, (0, 0))
+    sc.blit(game_sc, (20, 20))
+    game_sc.blit(back2, (0, 0))
+    record = get_record()
+    ox = 0
+    rotate = False
+    for i in range(full):
+        pygame.time.wait(200)
+    for event in pygame.event.get (): 
+        if event.type == pygame.QUIT:
+            exit()
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_LEFT:
+                ox = -1
+            elif event.key == pygame.K_RIGHT:
+                ox = 1
+            elif event.key == pygame.K_DOWN:
+                a_limit = 100
+            elif event.key == pygame.K_SPACE:
+                rotate = True
+            
+    fg_old = deepcopy(fg)
+
+    for i in range (4):
+        fg[i].x += ox
+        if not borders():
+            fg = deepcopy(fg_old)
+            break
+
+    a_count+=a_speed
+    if a_count > a_limit:
+        a_count = 0
+        fg_old = deepcopy(fg)
+        for i in range (4):
+            fg[i].y += 1
+            if not borders():
+                for i in range(4):
+                    field[fg_old[i].y][fg_old[i].x] = color
+                fg = nxt
+                color = get_color()
+                nxt = deepcopy(choice(figures))
+                a_limit = 2000
+                sound3.play()
+                break
+    
+    center = fg[0]
+
+    fg_old = deepcopy(fg)
+    if rotate:
+        for i in range (4):
+            y = fg[i].x - center.x
+            x = fg[i].y - center.y
+            fg[i].x=center.x - x
+            fg[i].y = center.y + y
+            if not borders():
+                fg = deepcopy(fg_old)
+                break
+
+    L, full = H-1, 0
+    for r in range(H-1,-1,-1):
+        count = 0
+        for i in range(W):
+            if field[r][i]:
+                count += 1
+            field[L][i] = field[r][i]
+        
+        if count < W:
+            L -= 1
+        else:
+            a_speed += 10
+            full += 1
+            sound2.play()
+    point += points[full]
+    
+    [pygame.draw.rect(game_sc, (70,70,70),i_t, 1) for i_t in grid]
+
+    for i in range(4):
+        fg_rect.x = fg[i].x * TILE
+        fg_rect.y = fg[i].y * TILE
+        pygame.draw.rect(game_sc, color, fg_rect)
+
+    sc.blit(title, (475,40))
+    sc.blit(title_score, (470, 650))
+    sc.blit(font2.render(str(point), True, pygame.Color('white')), (500,700 ))
+    sc.blit(title_record, (470, 550))
+    sc.blit(font2.render(record, True, pygame.Color('white')), (500, 600))
+
+    for y, raw in enumerate(field):
+        for x, col in enumerate(raw):
+            if col:
+                fg_rect.x, fg_rect.y = x * TILE, y * TILE
+                pygame.draw.rect(game_sc, col, fg_rect)
+
+    for i in range(4):
+        fg_rect.x = nxt[i].x * TILE + 380
+        fg_rect.y = nxt[i].y * TILE + 185
+        pygame.draw.rect(sc, pygame.Color('grey'), fg_rect)
+
+    for i in range(W):
+        if field[0][i]:
+            set_record(record, point)
+            field = [[0 for i in range(W)] for i in range(H)]
+            a_count, a_speed, a_limit = 0, 60, 2000
+            point = 0
+            sound1.play()
+            for j in grid:
+                pygame.draw.rect(game_sc, get_color(), j)
+                sc.blit(game_sc, (20, 20))
+                pygame.display.flip()
+                clock.tick(200)
+
+    pygame.display.flip()
+    clock.tick(FPS)
